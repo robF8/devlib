@@ -23,9 +23,10 @@ from devlib.collector import (CollectorBase, CollectorOutput,
                               CollectorOutputEntry)
 from devlib.utils.misc import ensure_file_directory_exists as _f
 
-
-PERF_COMMAND_TEMPLATE = '{binary} {command} {options} {events} sleep 1000 > {outfile} 2>&1 '
+PERF_COMMAND_TEMPLATE = '{binary} {command} {options} {events} > {outfile} 2>&1 '
 PERF_REPORT_COMMAND_TEMPLATE= '{binary} report {options} -i {datafile} > {outfile} 2>&1 '
+
+PERF_REPORT_SAMPLES_COMMAND_TEMPLATE= '{binary} report-sample {options} -i {datafile} > {outfile} 2>&1 '
 PERF_RECORD_COMMAND_TEMPLATE= '{binary} record {options} {events} -o {outfile}'
 
 PERF_DEFAULT_EVENTS = [
@@ -121,7 +122,6 @@ class PerfCollector(CollectorBase):
             self.command = command
         else:
             raise ValueError('Unsupported perf command, must be stat or record')
-
         self.binary = self.target.get_installed(self.perf_type)
         if self.force_install or not self.binary:
             self.binary = self._deploy_perf()
@@ -132,23 +132,28 @@ class PerfCollector(CollectorBase):
 
     def reset(self):
         self.target.killall(self.perf_type, as_root=self.target.is_rooted)
-        self.target.remove(self.target.get_workpath('TemporaryFile*'))
-        for label in self.labels:
-            filepath = self._get_target_file(label, 'data')
-            self.target.remove(filepath)
-            filepath = self._get_target_file(label, 'rpt')
-            self.target.remove(filepath)
+        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath(''))).split()
+        # Remove all perf related files from target
+        for file in files:
+            if '.rpt' in file or '.data' in file or '.rptsamples' in file or 'TemporaryFile' in file:
+                self.target.remove(self.target.get_workpath(file))
 
     def start(self):
         for command in self.commands:
-            self.target.kick_off(command)
+            self.target.background(command, as_root=self.target.is_rooted)
+        print('Kicked off Pids')
+        print(self.target.get_pids_of('simpleperf'))
 
     def stop(self):
+        print('Before Kill')
+        print(self.target.get_pids_of('simpleperf'))
         self.target.killall(self.perf_type, signal='SIGINT',
                             as_root=self.target.is_rooted)
         # perf doesn't transmit the signal to its sleep call so handled here:
         self.target.killall('sleep', as_root=self.target.is_rooted)
         # NB: we hope that no other "important" sleep is on-going
+        print('After Kill')
+        print(self.target.get_pids_of('simpleperf'))
 
     def set_output(self, output_path):
         self.output_path = output_path
@@ -164,6 +169,10 @@ class PerfCollector(CollectorBase):
                 self._wait_for_data_file_write(label, self.output_path)
                 path = self._pull_target_file_to_host(label, 'rpt', self.output_path)
                 output.append(CollectorOutputEntry(path, 'file'))
+                data_path = self._pull_target_file_to_host(label, 'data', self.output_path)
+                output.append(CollectorOutputEntry(data_path, 'file'))
+                report_samples_path = self._pull_target_file_to_host(label, 'rptsamples', self.output_path)
+                output.append(CollectorOutputEntry(report_samples_path, 'file'))
             else:
                 path = self._pull_target_file_to_host(label, 'out', self.output_path)
                 output.append(CollectorOutputEntry(path, 'file'))
@@ -202,6 +211,13 @@ class PerfCollector(CollectorBase):
                                                       outfile=self._get_target_file(label, 'rpt'))
         return command
 
+    def _build_perf_report_samples_command(self, report_options, label):
+        command = PERF_REPORT_SAMPLES_COMMAND_TEMPLATE.format(binary=self.binary,
+                                                      options=report_options or '',
+                                                      datafile=self._get_target_file(label, 'data'),
+                                                      outfile=self._get_target_file(label, 'rptsamples'))
+        return command
+
     def _build_perf_record_command(self, options, label):
         event_string = ' '.join(['-e {}'.format(e) for e in self.events])
         command = PERF_RECORD_COMMAND_TEMPLATE.format(binary=self.binary,
@@ -214,12 +230,12 @@ class PerfCollector(CollectorBase):
         target_file = self._get_target_file(label, extension)
         host_relpath = os.path.basename(target_file)
         host_file = _f(os.path.join(output_path, host_relpath))
-        self.target.pull(target_file, host_file)
+        self.target.pull(target_file, host_file, timeout=10000000)
         return host_file
 
     def _wait_for_data_file_write(self, label, output_path):
         data_file_finished_writing = False
-        max_tries = 80
+        max_tries = 10000
         current_tries = 0
         while not data_file_finished_writing:
             files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
@@ -234,9 +250,11 @@ class PerfCollector(CollectorBase):
                 data_file_finished_writing = True
         report_command = self._build_perf_report_command(self.report_options, label)
         self.target.execute(report_command)
+        report_samples_command = self._build_perf_report_samples_command('--show-callchain', label)
+        self.target.execute(report_samples_command)
 
     def _validate_events(self, events):
-        available_events_string = self.target.execute('{} list'.format(self.perf_type))
+        available_events_string = self.target.execute('{} list'.format(self.perf_type), as_root=True)
         available_events = available_events_string.splitlines()
         for available_event in available_events:
             if available_event == '':
