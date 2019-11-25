@@ -122,6 +122,11 @@ class PerfCollector(CollectorBase):
             self.command = command
         else:
             raise ValueError('Unsupported perf command, must be stat or record')
+        
+        if self._is_simpleperf_file_busy():
+            self._remove_simpleperf_file_from_target_directory()
+            self.target.uninstall(self.perf_type)
+            
         self.binary = self.target.get_installed(self.perf_type)
         if self.force_install or not self.binary:
             self.binary = self._deploy_perf()
@@ -177,6 +182,17 @@ class PerfCollector(CollectorBase):
                 path = self._pull_target_file_to_host(label, 'out', self.output_path)
                 output.append(CollectorOutputEntry(path, 'file'))
         return output
+
+    def _is_simpleperf_file_busy(self):
+        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
+        files = files.splitlines()
+        for file in files:
+            if file == self.perf_type:
+                return True
+        return False
+
+    def _remove_simpleperf_file_from_target_directory(self):
+        self.target.execute('rm {}'.format(self.target.get_workpath(self.perf_type)))
 
     def _deploy_perf(self):
         host_executable = os.path.join(PACKAGE_BIN_DIRECTORY,
