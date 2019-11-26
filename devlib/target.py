@@ -1471,6 +1471,7 @@ class AndroidTarget(Target):
         executable_name = with_name or os.path.basename(filepath)
         on_device_file = self.path.join(self.working_directory, executable_name)
         on_device_executable = self.path.join(self.executables_directory, executable_name)
+        print('EXECUTABLE_HOST_FILE_PATH: ' + filepath)
         self.push(filepath, on_device_file, timeout=timeout)
         if on_device_file != on_device_executable:
             self.execute('cp {} {}'.format(quote(on_device_file), quote(on_device_executable)),

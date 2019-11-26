@@ -129,15 +129,21 @@ class PerfCollector(TraceCollector):
         if self.force_install or not self.binary:
             self.binary = self._deploy_perf()
 
+        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
+        print('DEBUG_FILES_SIMPLEPERF_START: ' + files)
+
         self._validate_events(self.events)
 
         self.commands = self._build_commands()
 
     def reset(self):
         self.target.killall(self.perf_type, as_root=self.target.is_rooted)
-        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath(''))).split()
+        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
+        print('DEBUG_RESET_FILES_IN_DEVLIB_BEFORE_RESET: ' + files)
+        files = files.split()
         # Remove all perf related files from target
         for file in files:
+            print(file)
             if '.rpt' in file or '.data' in file or '.rptsamples' in file or 'TemporaryFile' in file:
                 self.target.remove(self.target.get_workpath(file))
 
@@ -183,6 +189,7 @@ class PerfCollector(TraceCollector):
     def _deploy_perf(self):
         host_executable = os.path.join(PACKAGE_BIN_DIRECTORY,
                                        self.target.abi, self.perf_type)
+        print('DEBUG_HOST EXECUTABLE: ' + host_executable)
         return self.target.install(host_executable)
 
     def _get_target_file(self, label, extension):
@@ -256,6 +263,7 @@ class PerfCollector(TraceCollector):
 
     def _validate_events(self, events):
         available_events_string = self.target.execute('{} list'.format(self.perf_type), as_root=True)
+        print('DEBUG_AVAILABLE_EVENTS: ' + available_events_string)
         available_events = available_events_string.splitlines()
         for available_event in available_events:
             if available_event == '':
