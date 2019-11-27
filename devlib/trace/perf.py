@@ -132,7 +132,8 @@ class PerfCollector(TraceCollector):
         files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
         print('DEBUG_FILES_SIMPLEPERF_START: ' + files)
 
-        self._validate_events(self.events)
+        #Removed validate events for now as simpleperf list seems to be unreliable
+        #self._validate_events(self.events)
 
         self.commands = self._build_commands()
 
@@ -146,6 +147,8 @@ class PerfCollector(TraceCollector):
             print(file)
             if '.rpt' in file or '.data' in file or '.rptsamples' in file or 'TemporaryFile' in file:
                 self.target.remove(self.target.get_workpath(file))
+        files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
+        print('DEBUG_RESET_FILES_IN_DEVLIB_AFTER_RESET: ' + files)
 
     def start(self):
         for command in self.commands:
