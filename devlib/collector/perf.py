@@ -131,7 +131,8 @@ class PerfCollector(CollectorBase):
         if self.force_install or not self.binary:
             self.binary = self._deploy_perf()
 
-        self._validate_events(self.events)
+        #Remove validate events for now as simpleperf list seems unreliable
+        #self._validate_events(self.events)
 
         self.commands = self._build_commands()
 
