@@ -131,7 +131,8 @@ class PerfCollector(CollectorBase):
         if self.force_install or not self.binary:
             self.binary = self._deploy_perf()
 
-        self._validate_events(self.events)
+        #Remove validate events for now as simpleperf list seems unreliable
+        #self._validate_events(self.events)
 
         self.commands = self._build_commands()
 
@@ -246,7 +247,7 @@ class PerfCollector(CollectorBase):
         target_file = self._get_target_file(label, extension)
         host_relpath = os.path.basename(target_file)
         host_file = _f(os.path.join(output_path, host_relpath))
-        self.target.pull(target_file, host_file, timeout=10000000)
+        self.target.pull(target_file, host_file, timeout=1000000)
         return host_file
 
     def _wait_for_data_file_write(self, label, output_path):
