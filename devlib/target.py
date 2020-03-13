@@ -296,7 +296,7 @@ class Target(object):
         self._resolve_paths()
         self.execute('mkdir -p {}'.format(quote(self.working_directory)))
         self.execute('mkdir -p {}'.format(quote(self.executables_directory)))
-        self.busybox = self.install(os.path.join(PACKAGE_BIN_DIRECTORY, self.abi, 'busybox'))
+        self.busybox = self.install(os.path.join(PACKAGE_BIN_DIRECTORY, self.abi, 'busybox'), timeout=10)
         self.platform.update_from_target(self)
         self._update_modules('connected')
         if self.platform.big_core and self.load_default_modules:
