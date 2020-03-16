@@ -159,7 +159,7 @@ def check_output(command, timeout=None, ignore=None, inputtext=None,
                  combined_output=False, **kwargs):
     """This is a version of subprocess.check_output that adds a timeout parameter to kill
     the subprocess if it does not return within the specified time."""
-    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-branchesz
     if ignore is None:
         ignore = []
     elif isinstance(ignore, int):
