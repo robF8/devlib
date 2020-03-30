@@ -27,6 +27,7 @@ from devlib.utils.misc import ensure_file_directory_exists as _f
 PERF_COMMAND_TEMPLATE = '{binary} {command} {options} {events} sleep 1000 > {outfile} 2>&1 '
 PERF_REPORT_COMMAND_TEMPLATE= '{binary} report {options} -i {datafile} > {outfile} 2>&1 '
 PERF_RECORD_COMMAND_TEMPLATE= '{binary} record {options} {events} -o {outfile}'
+PERF_REPORT_SAMPLES_COMMAND_TEMPLATE= '{binary} report-sample --show-callchain -i {datafile} > {outfile} 2>&1 '
 
 PERF_DEFAULT_EVENTS = [
     'cpu-migrations',
@@ -97,7 +98,6 @@ class PerfCollector(CollectorBase):
         self.labels = labels
         self.report_options = report_options
         self.output_path = None
-
         # Validate parameters
         if isinstance(optionstring, list):
             self.optionstrings = optionstring
@@ -132,12 +132,10 @@ class PerfCollector(CollectorBase):
 
     def reset(self):
         self.target.killall(self.perf_type, as_root=self.target.is_rooted)
-        self.target.remove(self.target.get_workpath('TemporaryFile*'))
-        for label in self.labels:
-            filepath = self._get_target_file(label, 'data')
-            self.target.remove(filepath)
-            filepath = self._get_target_file(label, 'rpt')
-            self.target.remove(filepath)
+        files = self.target.list_directory(self.target.get_workpath(''))
+        for file in files:
+            if '.rpt' in file or '.data' in file or '.rptsamples' in file or 'TemporaryFile' in file:
+                self.target.remove(self.target.get_workpath(file))
 
     def start(self):
         for command in self.commands:
@@ -158,12 +156,15 @@ class PerfCollector(CollectorBase):
             raise RuntimeError("Output path was not set.")
 
         output = CollectorOutput()
-
         for label in self.labels:
             if self.command == 'record':
                 self._wait_for_data_file_write(label, self.output_path)
-                path = self._pull_target_file_to_host(label, 'rpt', self.output_path)
-                output.append(CollectorOutputEntry(path, 'file'))
+                report_path = self._pull_target_file_to_host(label, 'rpt', self.output_path)
+                output.append(CollectorOutputEntry(report_path, 'file'))
+                data_path = self._pull_target_file_to_host(label, 'data', self.output_path)
+                output.append(CollectorOutputEntry(data_path, 'file'))
+                samples_path = self._pull_target_file_to_host(label, 'rptsamples', self.output_path)
+                output.append(CollectorOutputEntry(samples_path, 'file'))
             else:
                 path = self._pull_target_file_to_host(label, 'out', self.output_path)
                 output.append(CollectorOutputEntry(path, 'file'))
@@ -210,6 +211,12 @@ class PerfCollector(CollectorBase):
                                                       outfile=self._get_target_file(label, 'data'))
         return command
 
+    def _build_perf_report_samples_command(self, label):
+        command = PERF_REPORT_SAMPLES_COMMAND_TEMPLATE.format(binary=self.binary,
+                                                      datafile=self._get_target_file(label, 'data'),
+                                                      outfile=self._get_target_file(label, 'rptsamples'))
+        return command
+
     def _pull_target_file_to_host(self, label, extension, output_path):
         target_file = self._get_target_file(label, extension)
         host_relpath = os.path.basename(target_file)
@@ -234,6 +241,8 @@ class PerfCollector(CollectorBase):
                 data_file_finished_writing = True
         report_command = self._build_perf_report_command(self.report_options, label)
         self.target.execute(report_command)
+        report_samples_command = self._build_perf_report_samples_command(label)
+        self.target.execute(report_samples_command)
 
     def _validate_events(self, events):
         available_events_string = self.target.execute('{} list | {} cat'.format(self.perf_type, self.target.busybox))
