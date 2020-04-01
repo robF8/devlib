@@ -221,12 +221,12 @@ class PerfCollector(CollectorBase):
         target_file = self._get_target_file(label, extension)
         host_relpath = os.path.basename(target_file)
         host_file = _f(os.path.join(output_path, host_relpath))
-        self.target.pull(target_file, host_file)
+        self.target.pull(target_file, host_file, timeout=1000000)
         return host_file
 
     def _wait_for_data_file_write(self, label, output_path):
         data_file_finished_writing = False
-        max_tries = 80
+        max_tries = 1000
         current_tries = 0
         while not data_file_finished_writing:
             files = self.target.execute('cd {} && ls'.format(self.target.get_workpath('')))
