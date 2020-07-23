@@ -1564,7 +1564,7 @@ class AndroidTarget(Target):
         output = self.execute('dumpsys power')
         match = ANDROID_SCREEN_STATE_REGEX.search(output)
         if match:
-            if 'DOZE' in match.group(1).upper():
+            if 'Display Power: state=ON' in match.group(1).upper():
                 return True
             return boolean(match.group(1))
         else:
